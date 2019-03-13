@@ -33,7 +33,7 @@ echo "Starting grayscale registration"
     for i in `seq 2 $NUMBER`; do
         INi=`printf $low_path $i`
         REGi=`printf $HOMOPATH $i`
-        inverse_compositional_algorithm $ref_image $INi -f $REGi
+        inverse_compositional_algorithm $ref_image $INi -f $REGi -o 1
         rm $INi
     done
     rm $ref_image
