@@ -18,7 +18,7 @@ if [ -z "$ZOOM" ]; then
 fi
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-PATH=$PATH:${SCRIPTPATH%/*}/build/
+PATH=${SCRIPTPATH%/*}/build/:$PATH
 
 # set parameters
 ind_ini=2 # change to 1 to use the reference image during the fusion

@@ -11,8 +11,8 @@ if [ "$#" -lt "4" ]; then
 fi
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-PATH=$PATH:$SCRIPTPATH/scripts/
-PATH=$PATH:$SCRIPTPATH/build/
+PATH=$SCRIPTPATH/scripts/:$PATH
+PATH=$SCRIPTPATH/build/:$PATH
 
 # required parameters
 INPATH=$1

@@ -32,7 +32,7 @@ if [ -z "$CROP" ]; then
 fi
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-PATH=$PATH:${SCRIPTPATH%/*}/build/
+PATH=${SCRIPTPATH%/*}/build/:$PATH
 
 # number of input images
 number=$(($END - $INI + 1))

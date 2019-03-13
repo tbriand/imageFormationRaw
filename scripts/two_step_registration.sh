@@ -13,7 +13,7 @@ HOMOPATH=$2
 NUMBER=$3
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-PATH=$PATH:${SCRIPTPATH%/*}/build/
+PATH=${SCRIPTPATH%/*}/build/:$PATH
 
 # Step 1: lowpass filtering
 echo "Applying the lowpass filter to the CFA images"
