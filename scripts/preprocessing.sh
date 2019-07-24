@@ -1,7 +1,9 @@
 #!/bin/bash
-# Preprocessing of the RAW images
+# Preprocessing of the images
 # The input filenames must be formatted as FILENAME%i.EXT where %i represents the number of the image
 # The reference image must be the first one
+# Set raw = 1 to handle RAW images
+# For standard images raw_path is not used
 
 # function for the ponomarenko noise estimation
 ponomarenko_estimation() {
@@ -15,18 +17,20 @@ ponomarenko_estimation() {
 }
 
 # read input parameters
-if [ "$#" -lt "5" ]; then
-    echo "usage: $0 in_path raw_path cfa_path ind_ini ind_end crop_size"
-    echo "example: $0 PA%i.ORF raw_%i.tiff cfa_%i.tiff 1 100 512"
+if [ "$#" -lt "6" ]; then
+    echo "usage: $0 in_path raw_path im_path ind_ini ind_end raw crop_size"
+    echo "example with RAW images: $0 PA%i.ORF raw_%i.tiff cfa_%i.tiff 1 100 1 512"
+    echo "example with standard images: $0 PA%i.tiff /dev/null im_%i.tiff 1 100 0 512"
     exit 1
 fi
 
 INPATH=$1
 RAWPATH=$2
-CFAPATH=$3
+IMPATH=$3
 INI=$4
 END=$5
-CROP=$6 # crop of the input raw images (set to 0 if no crop should be used)
+RAW=$6
+CROP=$7 # crop of the input images (set to 0 if no crop should be used)
 if [ -z "$CROP" ]; then
     CROP=0
 fi
@@ -37,11 +41,11 @@ PATH=${SCRIPTPATH%/*}/build/:$PATH
 # number of input images
 number=$(($END - $INI + 1))
 
-# transform from RAW to TIFF format
-echo "Transforming from RAW to TIFF format using DCRAW..."
-
+# get the RAW images using DCRAW or just copy input
+if [ "$RAW" -eq "1" ]; then
     ext=${INPATH##*.} # capture the file extension
     if [ "$ext" = "tiff" ]; then
+        echo "Copying input RAW images"
         for i in `seq $INI $END`; do
             INi=`printf $INPATH $i`
             j=$(($i - $INI + 1))
@@ -51,6 +55,8 @@ echo "Transforming from RAW to TIFF format using DCRAW..."
             fi
         done
     else
+        # transform from RAW to TIFF format
+        echo "Transforming from RAW to TIFF format using DCRAW..."
         for i in `seq $INI $END`; do
             INi=`printf $INPATH $i`
             j=$(($i - $INI + 1))
@@ -60,10 +66,21 @@ echo "Transforming from RAW to TIFF format using DCRAW..."
             fi
         done
     fi
-
-echo "Done"
+else
+    RAWPATH=$IMPATH
+    echo "Copying input images"
+    for i in `seq $INI $END`; do
+        INi=`printf $INPATH $i`
+        j=$(($i - $INI + 1))
+        OUTj=`printf $RAWPATH $j`
+        if [ ! -f $OUTj ]; then
+            cp $INi $OUTj
+        fi
+    done
+fi
 
 # crop the input images
+# for standard images RAWPATH=IMPATH
 if [ "$CROP" -gt "0" ]; then
     echo "Cropping the input images..."
 
@@ -83,19 +100,18 @@ if [ "$CROP" -gt "0" ]; then
             RAWi=`printf $RAWPATH $i`
             crop $iniw $inih $endw $endh $RAWi $RAWi
         done
-
-    echo "Done"
 fi
 
-# Transform of the images to correct the noise model (vst)
-echo "Applying the VST..."
+if [ "$RAW" -eq "1" ]; then
+    # Transform of the images to correct the noise model (vst)
+    echo "Applying the VST..."
 
     vst_type=0
     raw_ref=`printf $RAWPATH 1`
     file_pono_in=$raw_ref
     file_pono_out=pono
     ponomarenko_estimation
-    
+
     # verify if there is enough points to evaluate the noise curve
     cmd="`cat ${file_pono_out}_1.txt`"
     l1=` echo "$cmd" | wc -l `
@@ -123,24 +139,23 @@ echo "Applying the VST..."
         fi
     fi
     RAWPATH2=${RAWPATH%%_*} # if RAWPATH=raw_%i.tiff then RAWPATH2=raw
-    CFAPATH2=${CFAPATH%%_*} 
-    ponomarenko_fit_raw_multiple $file_pono_out $RAWPATH2 tiff $CFAPATH2 $vst_type 1 $number
+    IMPATH2=${IMPATH%%_*} 
+    ponomarenko_fit_raw_multiple $file_pono_out $RAWPATH2 tiff $IMPATH2 $vst_type 1 $number
     rm ${file_pono_out}*
-
-echo "Done"
+fi
 
 # Channel and mean equalization
 echo "Channel and mean equalization"
     
-    cfa_ref=`printf $CFAPATH 1`
-    channel_equalization $cfa_ref $cfa_ref # multiplicative mean equalization of the color channels
-    affine0255 $cfa_ref $cfa_ref 255 # set the max to 255
+    im_ref=`printf $IMPATH 1`
+    if [ "$RAW" -eq "1" ]; then
+        channel_equalization $im_ref $im_ref # multiplicative mean equalization of the color channels
+    fi
+    affine0255 $im_ref $im_ref 255 # set the max to 255
 
     eq_type=meanx
-    raw=1
     for i in `seq 2 $number`; do
-        CFAi=`printf $CFAPATH $i`
-        equalization $cfa_ref $CFAi $CFAi $eq_type $raw
+        IMi=`printf $IMPATH $i`
+        equalization $im_ref $IMi $IMi $eq_type $RAW
     done
-    
-echo "Done"
+

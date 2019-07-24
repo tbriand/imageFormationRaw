@@ -1,6 +1,6 @@
 # Image Formation from a Large Sequence of RAW Images
 
-## SUMMARY
+## Summary
 
 A C, C++ and bash implementation of the image formation method from RAW images
 proposed by Thibaud Briand in 2018 (PhD thesis).
@@ -55,9 +55,9 @@ The program can be used through the image_formation.sh script.
 The input filenames must be formatted as FILENAME%i.EXT where %i represents the number of the image. 
 The reference image must be the first one.
 
-  usage:./image_formation.sh in_path ind_ini ind_end output_image zoom crop_size free
+  usage:./image_formation.sh in_path ind_ini ind_end output_image raw zoom crop_size free
       
-  example:./image_formation.sh PA%i.ORF 1 100 out.tiff 1 512 0
+  example:./image_formation.sh PA%i.ORF 1 100 out.tiff 1 1 512 0
 
 ## Files in the repository ##
 
