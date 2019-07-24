@@ -46,6 +46,6 @@ for i in `seq 2 $NUMBER`; do
 done | parallel
 
 if [ "$RAW" -eq "1" ]; then
-        rm $ref_image
+    rm $ref_image
 fi
 

@@ -326,4 +326,80 @@ static void apply_perfect_lowpass(double *in, double *out, int w, int h, int pd)
   free(outhat);
 }
 
+static void zoom_in(double *inhat, double *outhat, int zoom, int w, int h, int pd, int option)
+{
+  if( zoom > 1 ) {
+  double norm = zoom*zoom;
+  double (*outhat2)[w*zoom][2*pd] = (void*) outhat;
+  double (*inhat2)[w][2*pd] = (void*) inhat;
+
+    int w_test = w/2;
+    int h_test = h/2;
+    int ind_w = (w+1)/2;
+    int ind_h = (h+1)/2;
+
+    /* Fill the output array with zeros */
+     for (int i=0; i<2*pd*zoom*zoom*w*h; i++)
+        outhat[i]=0.0;
+
+    int jj, ii; /* new coordinates for original pixel (j,i) */
+    /* fill the corners with the values */
+    for(int j=0; j< h; j++){
+        jj = (j<ind_h) ? j : j + (zoom-1)*h;
+        for(int i=0; i<w; i++){
+            ii = (i<ind_w) ? i : i + (zoom-1)*w;
+            for (int l = 0; l < 2*pd; l++)
+                outhat2[jj][ii][l]  = inhat2[j][i][l]*norm;
+        }
+    }
+    
+    //optionally correct the high frequencies
+    if (option == 1) {
+        int ii2, jj2;
+        if ( w_test*2 == w ) {
+            ii = ind_w; //positive and location in input
+            ii2= ind_w + (zoom-1)*w; //negative
+            for(int j=0; j<h; j++) {
+                jj = (j<ind_h) ? j : j + (zoom-1)*h;
+                for (int l = 0; l < 2*pd; l++) {
+                    outhat2[jj][ii2][l]  *= 0.5;
+                    outhat2[jj][ii][l]  = outhat2[jj][ii2][l];
+                }
+            }
+        }
+        
+        if ( h_test*2 == h ) {
+            jj = ind_h; //positive and location in input
+            jj2= ind_h + (zoom-1)*h; //negative
+            for(int i=0; i<w; i++) {
+                ii = (i<ind_w) ? i : i + (zoom-1)*w;
+                for (int l = 0; l < 2*pd; l++) {
+                    outhat2[jj2][ii][l]  *= 0.5;
+                    outhat2[jj][ii][l]  = outhat2[jj2][ii][l];
+                }
+            }
+        }
+        
+        if ( h_test*2 == h && w_test*2 == w) {
+            double tmp;
+            ii = ind_w; //positive location in output and location in input
+            ii2= ind_w + (zoom-1)*w; //negative
+            jj = ind_h; //positive location in output and location in input
+            jj2= ind_h + (zoom-1)*h; //negative
+            for (int l = 0; l < 2*pd; l++) {
+                tmp = inhat2[jj][ii][l]*norm;
+                outhat2[jj][ii][l] = 0.25*tmp;
+                outhat2[jj][ii2][l] = 0.25*tmp;
+                outhat2[jj2][ii][l] = 0.25*tmp;
+                outhat2[jj2][ii2][l] = 0.25*tmp;
+            }
+        }
+    }
+  }
+  else {
+      for (int i=0; i<2*pd*zoom*zoom*w*h; i++)
+                outhat[i]=inhat[i];
+  }
+}
+
 #endif

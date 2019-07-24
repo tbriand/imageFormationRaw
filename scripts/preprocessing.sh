@@ -138,8 +138,8 @@ if [ "$RAW" -eq "1" ]; then
             exit 1
         fi
     fi
-    RAWPATH2=${RAWPATH%%_*} # if RAWPATH=raw_%i.tiff then RAWPATH2=raw
-    IMPATH2=${IMPATH%%_*} 
+    RAWPATH2=${RAWPATH%_*} # if RAWPATH=raw_%i.tiff then RAWPATH2=raw
+    IMPATH2=${IMPATH%_*} 
     ponomarenko_fit_raw_multiple $file_pono_out $RAWPATH2 tiff $IMPATH2 $vst_type 1 $number
     rm ${file_pono_out}*
 fi

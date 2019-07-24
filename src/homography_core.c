@@ -18,9 +18,13 @@
 #define HOMOGRAPHY_CORE
 
 #include <assert.h>
+#include <math.h>
 
+#include "random.c"
 #include "parsenumbers.c"
 #include "xfopen.c"
+#include "cmphomod.c"
+
 
 static void convert_ica_homography(double *homo) {
     if( homo[0] == 2 ) {
@@ -276,6 +280,42 @@ static void compute_field(float *field, double *homo1, double *homo2, int w, int
             field2[j][i] = hypot(z1[0]-z2[0],z1[1]-z2[1]);
         }
     }
+}
+
+static void create_random_translation(double H[9], int L)
+{
+        double tx = (2*L*random_uniform() - L);
+        double ty = (2*L*random_uniform() - L);
+        H[0] = 1;
+        H[1] = 0;
+        H[2] = tx;
+        H[3] = 0;
+        H[4] = 1;
+        H[5] = ty;
+        H[6] = 0;
+        H[7] = 0;
+        H[8] = 1;
+}
+
+static void create_random_homography(double H[9], int w, int h, int L)
+{
+    double corner[4][2] = {{0,0}, {w-1,0}, {0,h-1}, {w-1,h-1}};
+    double corner2[4][2];
+    double a;
+    
+    for(int j=0; j<2; j++)
+        for(int i=0; i<4; i++) {
+            a = random_uniform();
+            corner2[i][j] = corner[i][j] + (2*L*a - L);
+        }
+
+    double R[3][3];
+    homography_from_4corresp(
+    corner[0], corner[1], corner[2], corner[3],
+    corner2[0], corner2[1], corner2[2], corner2[3], R);
+
+    for(int i=0; i<9; i++) 
+        H[i] = R[i/3][i%3];
 }
 
 #endif

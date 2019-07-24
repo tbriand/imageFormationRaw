@@ -51,9 +51,15 @@ The program can be used through the image_formation.sh script.
 The input filenames must be formatted as FILENAME%i.EXT where %i represents the number of the image. 
 The reference image must be the first one.
 
-  usage:./image_formation.sh in_path ind_ini ind_end output_image raw zoom crop_size free
+  usage:./image_formation.sh in_path ind_ini ind_end output_image raw [zoom crop_size]
       
-  example:./image_formation.sh PA%i.ORF 1 100 out.tiff 1 1 512 0
+  example:./image_formation.sh PA%i.ORF 1 100 out.tiff 1 1 512
+
+The precision of the method can be tested on synthetic data using the evaluate_performance.sh script.
+
+  usage:./scripts/evaluate_performance.sh in number sigma raw [interp boundary L type zoom]
+
+  example:./scripts/evaluate_performance.sh data/rubberwhale.png 101 3 1
 
 ## Files in the repository ##
 
@@ -63,7 +69,7 @@ The reference image must be the first one.
 * image_formation.sh : main script for using the method
 * LICENSE            : license file
 * Readme.md          : readme file
-* scripts            : directory containing the scripts for the main steps of the method
+* scripts            : directory containing the bash scripts
 * src                : directory containing the source code
 
 ## Acknowledgements ##

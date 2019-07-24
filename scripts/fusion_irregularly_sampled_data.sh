@@ -34,8 +34,8 @@ fi
 # irregularly sampled data fitting
 echo "Starting data accumulation and blurry image computation"
 
-    INPATH2=${INPATH%%_*}
-    HOMOPATH2=${HOMOPATH%%_*}
+    INPATH2=${INPATH%_*}
+    HOMOPATH2=${HOMOPATH%_*}
     combi_ckr $INPATH2 $HOMOPATH2 $ind_ini $NUMBER $ZOOM $OUT $order $sigma $RAW
 
 # sharpening step
