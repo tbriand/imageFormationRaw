@@ -20,7 +20,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#ifdef _OPENMP
 #include <omp.h>
+#endif
 
 #include "equalization_core.c"
 #include "homography_core.c"
