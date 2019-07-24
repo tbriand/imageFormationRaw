@@ -62,9 +62,9 @@ if [ "$RAW" -eq "1" ]; then
             j=$(($i - $INI + 1))
             OUTj=`printf $RAWPATH $j`
             if [ ! -f $OUTj ]; then
-                dcraw -v -4 -d -T -c $INi > $OUTj 2> /dev/null
+                echo "dcraw -v -4 -d -T -c $INi > $OUTj 2> /dev/null"
             fi
-        done
+        done | parallel -j 4
     fi
 else
     RAWPATH=$IMPATH
@@ -98,8 +98,8 @@ if [ "$CROP" -gt "0" ]; then
         # perform the crop
         for i in `seq 1 $number`; do
             RAWi=`printf $RAWPATH $i`
-            crop $iniw $inih $endw $endh $RAWi $RAWi
-        done
+            echo "crop $iniw $inih $endw $endh $RAWi $RAWi"
+        done | parallel -j 4
 fi
 
 if [ "$RAW" -eq "1" ]; then
@@ -156,6 +156,5 @@ echo "Channel and mean equalization"
     eq_type=meanx
     for i in `seq 2 $number`; do
         IMi=`printf $IMPATH $i`
-        equalization $im_ref $IMi $IMi $eq_type $RAW
-    done
-
+        echo "equalization $im_ref $IMi $IMi $eq_type $RAW"
+    done | parallel

@@ -34,3 +34,5 @@ cd ../../
 
 cd ..
 
+# move GNU parallel
+cp external/parallel $dir

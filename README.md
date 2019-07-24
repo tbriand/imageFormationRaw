@@ -14,10 +14,6 @@ Link to the PDF: https://pastel.archives-ouvertes.fr/tel-01980492
 Laboratoire d'Informatique Gaspard Monge (LIGM)/
 Ecole des Ponts ParisTech
 
-## Version ##
-
-Version 1.0, released on 03/05/2019
-
 ## License ##
 
 This program is free software: you can redistribute it and/or modify it

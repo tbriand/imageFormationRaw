@@ -25,8 +25,8 @@ if [ "$RAW" -eq "1" ]; then
     for i in `seq 1 $NUMBER`; do
         INi=`printf $INPATH $i`
         OUTi=`printf $INPATH2 $i`
-        lowpass $INi $OUTi 0
-    done
+        echo "lowpass $INi $OUTi 0"
+    done | parallel
 else
     INPATH2=$INPATH
 fi
@@ -38,11 +38,12 @@ ref_image=`printf $INPATH2 1`
 for i in `seq 2 $NUMBER`; do
     INi=`printf $INPATH2 $i`
     REGi=`printf $HOMOPATH $i`
-    inverse_compositional_algorithm $ref_image $INi -f $REGi -o 1
+    to_echo="inverse_compositional_algorithm $ref_image $INi -f $REGi -o 1"
     if [ "$RAW" -eq "1" ]; then
-        rm $INi
+        to_echo="$to_echo; rm $INi"
     fi
-done
+    echo "$to_echo"
+done | parallel
 
 if [ "$RAW" -eq "1" ]; then
         rm $ref_image
