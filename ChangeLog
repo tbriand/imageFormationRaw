@@ -1,0 +1,14 @@
+# Changelog
+All notable changes to this project will be documented in this file.
+
+## [1.1.0] - 2019-07-24
+### Added
+- Extension to standard images (grayscale or color)
+- Generation of synthetic burst
+- Evaluation of the method performance on synthetic data
+- Parallelization in preprocessing and registration steps
+
+## [1.0.0] - 2019-03-05 
+### Initial version
+- Image formation method from RAW images
+

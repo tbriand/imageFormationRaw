@@ -64,6 +64,7 @@ The precision of the method can be tested on synthetic data using the evaluate_p
 ## Files in the repository ##
 
 * build.sh           : script for the compilation
+* ChangeLog	     : list of all notable changes to the project
 * CMakeLists.txt     : cmake file
 * external           : directory containing external programs (dcraw, ponomarenko, modified inverse compositional)
 * image_formation.sh : main script for using the method
