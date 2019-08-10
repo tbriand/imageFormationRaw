@@ -8,7 +8,7 @@ mkdir $dir
 # Compilation of the internal binaries
 cd $dir
 cmake -DCMAKE_BUILD_TYPE=Release ..
-make
+make -j
 cd ..
 
 # Compilation of the external binaries
