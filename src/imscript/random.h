@@ -1,5 +1,5 @@
-#ifndef _RANDOM_C
-#define _RANDOM_C
+#ifndef _RANDOM_H
+#define _RANDOM_H
 
 #include <math.h>
 #include <stdlib.h>
@@ -148,4 +148,4 @@ static double random_stable(double alpha, double beta)
 	return r;
 }
 
-#endif//_RANDOM_C
+#endif//_RANDOM_H

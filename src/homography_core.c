@@ -20,7 +20,7 @@
 #include <assert.h>
 #include <math.h>
 
-#include "random.c"
+#include "random.h"
 #include "parsenumbers.c"
 #include "xfopen.c"
 #include "cmphomod.h"

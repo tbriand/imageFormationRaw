@@ -3,7 +3,7 @@
 #include <math.h>
 #include "iio.h"
 #include "xmtime.h"
-#include "random.c"
+#include "random.h"
 
 int main(int c, char *v[])
 {
