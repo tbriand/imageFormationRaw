@@ -23,11 +23,12 @@ endif()
 set(PROGRAMS crop split_raw lowpass combi_ckr asymptotic_nc_filter concatenate_images ponomarenko_fit_raw_multiple channel_equalization affine0255 equalization create_burst add_noise rgb2raw compute difference_images compare_homography mean_and_std)
 set(LIBS m jpeg png tiff fftw3f fftw3 ${GSL_LIBRARIES})
 
-set(IMSCRIPT src/imscript/)
-include_directories(${IMSCRIPT})
-
 set(EXTERNAL external/)
 include_directories(${EXTERNAL})
+
+set(IMSCRIPT ${EXTERNAL}/imscript/)
+include_directories(${IMSCRIPT})
+
 
 foreach(prg ${PROGRAMS})
     add_executable(${prg} src/${prg}.c ${IMSCRIPT}/iio.c)
