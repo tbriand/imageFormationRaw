@@ -23,7 +23,7 @@
 #include "random.c"
 #include "parsenumbers.c"
 #include "xfopen.c"
-#include "cmphomod.c"
+#include "cmphomod.h"
 
 
 static void convert_ica_homography(double *homo) {
