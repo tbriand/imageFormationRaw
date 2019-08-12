@@ -218,7 +218,7 @@ void upsampling(double *out, double *in, int nxin, int nyin, int nxout, int nyou
 }
 
 // Compute the DFT coefficients of the down-sampled image (Line 2 of Algorithm 4 using Proposition 12).
-static void downsampling_fourier(fftw_complex *out, fftw_complex *in,
+void downsampling_fourier(fftw_complex *out, fftw_complex *in,
                                  int nxin, int nyin, int nxout, int nyout, int nz)
 {
     int i, j, l, i2, j2;
