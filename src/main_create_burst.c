@@ -229,7 +229,7 @@ int main(int c, char *v[])
                 for(int l = 0; l < pd; l++)
                     for(int q = 0; q < hcrop; q++)
                         for(int p = 0; p < wcrop; p++)
-                            out_crop[p + q*wcrop + l*wcrop*hcrop] = out[p + crop + (q+crop)*w + l*w*h];
+                            out_crop[p + q*wcrop + l*wcrop*hcrop] = out[p + crop + (q+crop)*wout + l*wout*hout];
                 
                 sprintf(filename_out, "%s_crop_%i.tiff", base_out, j+1);
                 iio_write_image_double_split(filename_out, out_crop, wcrop, hcrop, pd);
