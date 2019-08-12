@@ -22,7 +22,7 @@ SIGMA=$3
 RAW=$4
 INTERP=$5
 if [ -z "$INTERP" ]; then
-    INTERP=splineper
+    INTERP=p+s-spline11-spline3
 fi
 BOUNDARY=$6
 if [ -z "$BOUNDARY" ]; then

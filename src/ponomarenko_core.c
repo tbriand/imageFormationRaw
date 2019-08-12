@@ -14,16 +14,13 @@
  *
  */
 
-#ifndef PONOMARENKO_CORE
-#define PONOMARENKO_CORE
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 
-#include "parsenumbers.c"
-#include "xfopen.c"
 #include "iio.h"
+#include "parsenumbers.h"
+
 
 // regression y = sqrt(A+Bx) i.e y^2 = A + Bx
 static void regression_ponomarenko(const double *t, int n, double A[2]) {
@@ -65,19 +62,19 @@ static void regression_ponomarenko(const double *t, int n, double A[2]) {
     }
 }
 
-static void regression_1channel(char *filename, double C[2])
+void regression_1channel(char *filename, double C[2])
 {
-    FILE *f = xfopen(filename, "r");
+    FILE *f = fopen(filename, "r");
     int n;
     double *t = read_ascii_doubles(f, &n);
-    xfclose(f);
+    fclose(f);
     
     // regression
     regression_ponomarenko(t, n, C);
     free(t);
 }
 
-static void regression_3channels(char *inpat, int ind, double R[2], double G[2], double B[2])
+void regression_3channels(char *inpat, int ind, double R[2], double G[2], double B[2])
 {
     char filename[1000];
     
@@ -87,10 +84,10 @@ static void regression_3channels(char *inpat, int ind, double R[2], double G[2],
         sprintf(filename,"%s_1.txt", inpat);
     else 
         sprintf(filename,"%s_%i_1.txt", inpat, ind);
-    FILE *fr = xfopen(filename, "r");
+    FILE *fr = fopen(filename, "r");
     int nr;
     double *r = read_ascii_doubles(fr, &nr);
-    xfclose(fr);
+    fclose(fr);
     
     // regression
     regression_ponomarenko(r, nr, R);
@@ -102,10 +99,10 @@ static void regression_3channels(char *inpat, int ind, double R[2], double G[2],
         sprintf(filename,"%s_4.txt", inpat);
     else 
         sprintf(filename,"%s_%i_4.txt", inpat, ind);
-    FILE *fb = xfopen(filename, "r");
+    FILE *fb = fopen(filename, "r");
     int nb;
     double *b = read_ascii_doubles(fb, &nb);
-    xfclose(fb);
+    fclose(fb);
     
     // regression
     regression_ponomarenko(b, nb, B);
@@ -117,19 +114,19 @@ static void regression_3channels(char *inpat, int ind, double R[2], double G[2],
         sprintf(filename,"%s_2.txt", inpat);
     else 
         sprintf(filename,"%s_%i_2.txt", inpat, ind);
-    FILE *fg1 = xfopen(filename, "r");
+    FILE *fg1 = fopen(filename, "r");
     int ng1;
     double *g1 = read_ascii_doubles(fg1, &ng1);
-    xfclose(fg1);
+    fclose(fg1);
     
     if ( ind == -1 )
         sprintf(filename,"%s_3.txt", inpat);
     else 
         sprintf(filename,"%s_%i_3.txt", inpat, ind);
-    FILE *fg2 = xfopen(filename, "r");
+    FILE *fg2 = fopen(filename, "r");
     int ng2;
     double *g2 = read_ascii_doubles(fg2, &ng2);
-    xfclose(fg2);
+    fclose(fg2);
     
     int ng = ng1 + ng2;
     double *g = malloc(ng*sizeof*g);
@@ -145,23 +142,23 @@ static void regression_3channels(char *inpat, int ind, double R[2], double G[2],
     free(g);
 }
 
-static void vst_1channel(char *filename_in, char *filename_out, const double C[2])
+void vst_1channel(char *filename_in, char *filename_out, const double C[2])
 {
     int w, h, pd;
-    double *in = iio_read_image_double_vec(filename_in, &w, &h, &pd);
+    double *in = iio_read_image_double_split(filename_in, &w, &h, &pd);
     if ( pd != 1 )
         fprintf(stderr,"Wrong number of channels (pd = %i) for image %s\n", pd, filename_in);
     double *out = malloc( w * h * sizeof*out );
 
     for( int i = 0; i < w*h; i++) 
         out[i] = sqrt(C[0]+C[1]*in[i]);
-    iio_write_image_double_vec(filename_out, out, w, h, 1);
+    iio_write_image_double_split(filename_out, out, w, h, 1);
     
     free(in);
     free(out);
 }
 
-static void vst_3channels(char *inpat, char *ext, char *outpat, int ind, double R[2], double G[2], double B[2])
+void vst_3channels(char *inpat, char *ext, char *outpat, int ind, double R[2], double G[2], double B[2])
 {
     char filename_in[1000];
     char filename_out[1000];
@@ -176,7 +173,7 @@ static void vst_3channels(char *inpat, char *ext, char *outpat, int ind, double 
     }
     
     int w, h, pd;
-    double *in = iio_read_image_double_vec(filename_in, &w, &h, &pd);
+    double *in = iio_read_image_double_split(filename_in, &w, &h, &pd);
     if ( pd != 1 )
         fprintf(stderr,"Wrong number of channels (pd = %i) for image %s\n", pd, filename_in);
     double *out = malloc( w * h * sizeof*out );
@@ -201,7 +198,7 @@ static void vst_3channels(char *inpat, char *ext, char *outpat, int ind, double 
             out[i+w*j] = (A+C*in[i+w*j] >=0 ) ? sqrt(A+C*in[i+w*j]) : 0;
         }
     }
-    iio_write_image_double_vec(filename_out, out, w, h, 1);
+    iio_write_image_double_split(filename_out, out, w, h, 1);
     
     free(in);
     free(out);
@@ -260,17 +257,17 @@ static double trapeze_integral(double x, double *pos, double *val, double *slope
     }
 }
 
-static void vst_trapeze(char *inpat, char *image_in, char *image_out) {
+void vst_trapeze(char *inpat, char *image_in, char *image_out) {
     
     char filename[1000];
     
     //printf("red channel\n");
     /* red channel */
     sprintf(filename,"%s_1.txt", inpat);
-    FILE *fr = xfopen(filename, "r");
+    FILE *fr = fopen(filename, "r");
     int nr;
     double *r = read_ascii_doubles(fr, &nr);
-    xfclose(fr);
+    fclose(fr);
     int nr2 = nr/2 + 1; // nr/2 points + the zero
     double *rpos = malloc(nr2*sizeof*rpos);
     double *rval = malloc(nr2*sizeof*rval);
@@ -280,10 +277,10 @@ static void vst_trapeze(char *inpat, char *image_in, char *image_out) {
     
     /* blue channel */
     sprintf(filename,"%s_4.txt", inpat);
-    FILE *fb = xfopen(filename, "r");
+    FILE *fb = fopen(filename, "r");
     int nb;
     double *b = read_ascii_doubles(fb, &nb);
-    xfclose(fb);
+    fclose(fb);
     int nb2 = nb/2 + 1;
     double *bpos = malloc(nb2*sizeof*bpos);
     double *bval = malloc(nb2*sizeof*bval);
@@ -293,16 +290,16 @@ static void vst_trapeze(char *inpat, char *image_in, char *image_out) {
 
     /* green channel */
     sprintf(filename,"%s_2.txt", inpat);
-    FILE *fg1 = xfopen(filename, "r");
+    FILE *fg1 = fopen(filename, "r");
     int ng1;
     double *g1 = read_ascii_doubles(fg1, &ng1);
-    xfclose(fg1);
+    fclose(fg1);
     
     sprintf(filename,"%s_3.txt", inpat);
-    FILE *fg2 = xfopen(filename, "r");
+    FILE *fg2 = fopen(filename, "r");
     int ng2;
     double *g2 = read_ascii_doubles(fg2, &ng2);
-    xfclose(fg2);
+    fclose(fg2);
     
     // merge the two arrays but keep it sorted with respect to the position
         int ng = ng1 + ng2;
@@ -337,7 +334,7 @@ static void vst_trapeze(char *inpat, char *image_in, char *image_out) {
     
     // read image
     int w, h, pd;
-    double *in = iio_read_image_double_vec(image_in, &w, &h, &pd);
+    double *in = iio_read_image_double_split(image_in, &w, &h, &pd);
     if ( pd != 1 )
         fprintf(stderr,"Wrong number of channels (pd = %i) for image %s\n", pd, image_in);
 
@@ -357,7 +354,7 @@ static void vst_trapeze(char *inpat, char *image_in, char *image_out) {
     }
     
     //printf("Write output\n");
-    iio_write_image_double_vec(image_out, out, w, h, 1);
+    iio_write_image_double_split(image_out, out, w, h, 1);
     
     // free memory
     free(r);
@@ -381,17 +378,17 @@ static void vst_trapeze(char *inpat, char *image_in, char *image_out) {
     free(out);
 }
 
-static void vst_trapeze_multiple(char *inpat, char *inpat_img, char *ext, char *outpat_img, int ini, int end) {
+void vst_trapeze_multiple(char *inpat, char *inpat_img, char *ext, char *outpat_img, int ini, int end) {
     
     char filename[1000];
     
     //printf("red channel\n");
     /* red channel */
     sprintf(filename,"%s_1.txt", inpat);
-    FILE *fr = xfopen(filename, "r");
+    FILE *fr = fopen(filename, "r");
     int nr;
     double *r = read_ascii_doubles(fr, &nr);
-    xfclose(fr);
+    fclose(fr);
     int nr2 = nr/2 + 1; // nr/2 points + the zero
     double *rpos = malloc(nr2*sizeof*rpos);
     double *rval = malloc(nr2*sizeof*rval);
@@ -401,10 +398,10 @@ static void vst_trapeze_multiple(char *inpat, char *inpat_img, char *ext, char *
     
     /* blue channel */
     sprintf(filename,"%s_4.txt", inpat);
-    FILE *fb = xfopen(filename, "r");
+    FILE *fb = fopen(filename, "r");
     int nb;
     double *b = read_ascii_doubles(fb, &nb);
-    xfclose(fb);
+    fclose(fb);
     int nb2 = nb/2 + 1;
     double *bpos = malloc(nb2*sizeof*bpos);
     double *bval = malloc(nb2*sizeof*bval);
@@ -414,16 +411,16 @@ static void vst_trapeze_multiple(char *inpat, char *inpat_img, char *ext, char *
     
     /* green channel */
     sprintf(filename,"%s_2.txt", inpat);
-    FILE *fg1 = xfopen(filename, "r");
+    FILE *fg1 = fopen(filename, "r");
     int ng1;
     double *g1 = read_ascii_doubles(fg1, &ng1);
-    xfclose(fg1);
+    fclose(fg1);
     
     sprintf(filename,"%s_3.txt", inpat);
-    FILE *fg2 = xfopen(filename, "r");
+    FILE *fg2 = fopen(filename, "r");
     int ng2;
     double *g2 = read_ascii_doubles(fg2, &ng2);
-    xfclose(fg2);
+    fclose(fg2);
     
     // merge the two arrays but keep it sorted with respect to the position
         int ng = ng1 + ng2;
@@ -462,7 +459,7 @@ static void vst_trapeze_multiple(char *inpat, char *inpat_img, char *ext, char *
     char filename_img_in[1000], filename_img_out[1000];
     for (int index = ini; index <= end; index++) {
         sprintf(filename_img_in,"%s_%i.%s", inpat_img, index, ext);
-        img_in = iio_read_image_double_vec(filename_img_in, &w, &h, &pd);
+        img_in = iio_read_image_double_split(filename_img_in, &w, &h, &pd);
         if ( pd != 1 )
             fprintf(stderr,"Wrong number of channels (pd = %i) for image %s\n", pd, filename_img_in);
         
@@ -482,7 +479,7 @@ static void vst_trapeze_multiple(char *inpat, char *inpat_img, char *ext, char *
         }
         
         sprintf(filename_img_out,"%s_%i.tiff", outpat_img, index);
-        iio_write_image_double_vec(filename_img_out, img_out, w, h, 1);
+        iio_write_image_double_split(filename_img_out, img_out, w, h, 1);
         free(img_in);
         free(img_out);
     }
@@ -507,4 +504,3 @@ static void vst_trapeze_multiple(char *inpat, char *inpat_img, char *ext, char *
     free(g2);
  }
  
-#endif

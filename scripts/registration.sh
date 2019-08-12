@@ -25,8 +25,8 @@ if [ "$RAW" -eq "1" ]; then
     for i in `seq 1 $NUMBER`; do
         INi=`printf $INPATH $i`
         OUTi=`printf $INPATH2 $i`
-        echo "lowpass $INi $OUTi 0"
-    done | parallel
+        lowpass $INi $OUTi 0
+    done
 else
     INPATH2=$INPATH
 fi
@@ -35,6 +35,9 @@ fi
 echo "Starting standard registration"
 
 ref_image=`printf $INPATH2 1`
+REGi=`printf $HOMOPATH 1`
+echo "1 0 0 0 1 0 0 0 1" > $REGi # identity for reference image
+
 for i in `seq 2 $NUMBER`; do
     INi=`printf $INPATH2 $i`
     REGi=`printf $HOMOPATH $i`

@@ -20,14 +20,14 @@ mv dcraw ../$dir
 
 # modified inverse compositional algorithm
 cd modified_inverse_compositional
-make
+make -j
 mv inverse_compositional_algorithm ../../$dir
 make clean
 cd ..
 
 # ponomarenko
 cd ponomarenko_v4/ponomarenko
-make
+make -j
 mv ponomarenko ../../../$dir
 make clean
 cd ../../

@@ -14,9 +14,6 @@
  *
  */
 
-#ifndef COMBI_CKR_CORE
-#define COMBI_CKR_CORE
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -24,10 +21,11 @@
 #include <omp.h>
 #endif
 
-#include "equalization_core.c"
-#include "homography_core.c"
-#include "fft_core.c"
-#include "filter_core.c"
+#include "iio.h"
+#include "homography_core.h"
+#include "fft_core.h"
+#include "filter_core.h"
+#include "combi_ckr_core.h"
 
 static double compute_pixel_value(const double *C, int order)
 {
@@ -39,10 +37,8 @@ static double compute_pixel_value(const double *C, int order)
       if( C[0] > 0 )
         p = C[1]/C[0];
       else
-      {
-	if( C[2] > 0)
-	  p = C[3]/C[2];
-      }
+          if( C[2] > 0)
+              p = C[3]/C[2];
       break;
     case 1: ;
       if( C[9] > 6 ) { // need 3 points at least but if less it might give bad results
@@ -192,186 +188,149 @@ static double compute_pixel_value(const double *C, int order)
   return(p);
 }
 
-static void compute_gradient(double *grad, const double *in, int w, int h, int pd)
+void compute_image(double *out, const double *buffer, int w, int h, int pd, int order, int Nreg)
 {
-  double (*grad2)[w][pd] = (void*) grad;
-  double (*in2)[w][pd] = (void*) in;
-  double tmp, tmp2, val;
-  for( int l=0; l<pd; l++) {
-    for( int i=0; i<w; i++) {
-      for( int j=0; j<h; j++) {
-	tmp = 0;
-	val = in2[j][i][l];
-	if( i > 0 ) {
-	  tmp2 = fabs(val - in2[j][i-1][l]);
-	  tmp = ( tmp2 > tmp ) ? tmp2 : tmp;
-	}
-	if( i < w-1 ) {
-	  tmp2 = fabs(val - in2[j][i+1][l]);
-	  tmp = ( tmp2 > tmp ) ? tmp2 : tmp;
-	}
-	if( j > 0 ) {
-	  tmp2 = fabs(val - in2[j-1][i][l]);
-	  tmp = ( tmp2 > tmp ) ? tmp2 : tmp;
-	}
-	if( j < h-1 ) {
-	  tmp2 = fabs(val - in2[j+1][i][l]);
-	  tmp = ( tmp2 > tmp ) ? tmp2 : tmp;
-	}
-	grad2[j][i][l] = tmp;
-      }
-    }
-  }
-}
+    double C[Nreg];
+    for(int i=0; i<w*h*pd; i++) {
+        for(int j=0; j<Nreg; j++)
+            C[j] = buffer[Nreg*i+j];
 
-static void compute_image(double *out, const double *buffer, int w, int h, int pd, int order, int Nreg)
-{
-  double C[Nreg];
-    for( int i=0; i<w*h*pd; i++) {
-      for( int j=0; j<Nreg; j++)
-        C[j]=buffer[Nreg*i+j];
-
-      out[i] = compute_pixel_value(C, order);
+        out[i] = compute_pixel_value(C, order);
     }
 }
-
-const int nprecompute = 1000000;
-const float r2max = 16; // compute the weight for r2 in [0 rmax]
 
 static void fill_buffer(double *buffer, const double *image, double *homo, float zoom, int w, int h, int pd,
                         int order, int Nreg, double sigma2, int raw, const double *applic)
 {
-  int wout = w*zoom;
-  int hout = h*zoom;
-  
-  // values for the indices
-  double radius2 = r2max*sigma2;
-  double step = nprecompute/radius2;
-  double indmax = sqrt(radius2);
-  
-  double (*image2)[w][pd] = (void *) image;
-  int pd3 = (raw == 1) ? 3 : pd;
-  double (*buffer2)[wout][pd3][Nreg] = (void *) buffer;
+    int wout = w*zoom;
+    int hout = h*zoom;
 
-  // invert the homography
-  double ihomo[9];
-  invert_homography(ihomo,homo);
+    // values for the indices
+    double radius2 = R2MAX*sigma2;
+    double step = NPRECOMPUTE*1.0/radius2;
+    double indmax = sqrt(radius2);
 
-  int l,i,j, pd2, m, n;
-  double Im, Im2;
-  double x, y, xc, yc, wc, r2, xc2, yc2, xc3, yc3;
-  double p[2], q[2];
+    int pd3 = (raw == 1) ? 3 : pd;
+    //double (*buffer2)[wout][pd3][Nreg] = (void *) buffer;
+
+    // invert the homography
+    double ihomo[9];
+    invert_homography(ihomo,homo);
+
+    int l, i, j, pd2, m, n, ind;
+    double Im, Im2;
+    double x, y, xc, yc, wc, r2, xc2, yc2, xc3, yc3;
+    double p[2], q[2];
   
     /* loop over the pixel of the image */
-    for(l=0; l<pd; l++)
-    for (i=0; i<w; i++) {
-        p[0] = i;
-        for (j=0; j<h ; j++)
-        {
-        pd2 = (raw == 1) ? i%2 + j%2 : l; // Bayer filter RGGB
-        Im = image2[j][i][l];
-        // compute the value of h^{-1}(i,j)
-        p[1]=j;
-        apply_homo(q, p, ihomo);
-        x = zoom*q[0];
-        y = zoom*q[1];
-        
-        // search the pixel for which (x,y) is in their neighborhood (circle of radius radius)
-        for (m=x - indmax - 1; m <= x + indmax+1; m++) // only look for relevant indices
-            if(m>=0 && m<wout) // in the image
-            for (n= y - indmax - 1; n<= y + indmax+1; n++) // only look for relevant indices
-                if(n>=0 && n<hout) // in the image
-                {
-                xc = x - m;
-                yc = y - n;
-                xc2 = xc*xc;
-                yc2 = yc*yc;
-                r2 = xc2+yc2;
-                if( r2<radius2 ) {
-                    wc = applic[(int) round(r2*step)]; //r2 is almost i*r2max/nprecompute = i/step
-                    Im2 = wc*Im;
+    for (j=0; j<h ; j++) {
+        p[1] = j;
+        for (i=0; i<w; i++) {
+            // compute the value of h^{-1}(i,j)
+            p[0] = i;
+            apply_homography(q, p, ihomo);
+            x = zoom*q[0];
+            y = zoom*q[1];
+            
+            // search the pixel for which (x,y) is in their neighborhood (circle of radius radius)
+            for (m = x - indmax - 1; m <= x + indmax + 1; m++) // only look for relevant indices
+                if(m>=0 && m<wout) // in the image
+                    for (n = y - indmax - 1; n <= y + indmax+1; n++) // only look for relevant indices
+                        if(n>=0 && n<hout) { // in the image
+                            xc = x - m;
+                            yc = y - n;
+                            xc2 = xc*xc;
+                            yc2 = yc*yc;
+                            r2 = xc2+yc2;
+                            if( r2<radius2 ) {
+                                wc = applic[(int) round(r2*step)]; //r2 is almost i*R2MAX/NPRECOMPUTE = i/step
+                                for(l = 0; l<pd; l++) {
+                                    pd2 = (raw == 1) ? i%2 + j%2 : l; // Bayer filter RGGB
+                                    ind = (m + n*wout + pd2*wout*hout)*Nreg; // index in buffer
+                                    Im = image[i+j*w+l*w*h];
+                                    Im2 = wc*Im;
 
-                    switch ( order )
-                    {
-                    case 0:
-                        buffer2[n][m][pd2][0] += wc;
-                        buffer2[n][m][pd2][1] += Im2;
-                        buffer2[n][m][pd2][2] += 1;
-                        buffer2[n][m][pd2][3] += Im;
-                        break;
-                    case 1:
-                        buffer2[n][m][pd2][0] += wc;
-                        buffer2[n][m][pd2][1] += wc*xc;
-                        buffer2[n][m][pd2][2] += wc*yc;
-                        buffer2[n][m][pd2][3] += wc*xc2;
-                        buffer2[n][m][pd2][4] += wc*xc*yc;
-                        buffer2[n][m][pd2][5] += wc*yc2;
-                        buffer2[n][m][pd2][6] += Im2;
-                        buffer2[n][m][pd2][7] += Im2*xc;
-                        buffer2[n][m][pd2][8] += Im2*yc;
-                        buffer2[n][m][pd2][9] += 1;
-                        buffer2[n][m][pd2][10] += Im;
-                        // C[0] <--> A11 <--> sum w_i
-                        // C[1] <--> A12 <--> sum w_i x_i
-                        // C[2] <--> A13 <--> sum w_i y_i
-                        // C[3] <--> A22 <--> sum w_i x_i^2
-                        // C[4] <--> A23 <--> sum w_i x_i y_i
-                        // C[5] <--> A33 <--> sum w_i y_i^2
-                        // C[6] <--> B1 <--> sum w_i I_i
-                        // C[7] <--> B2 <--> sum w_i I_i x_i
-                        // C[8] <--> B3 <--> sum w_i I_i y_i
-                        break;
-                    case 2:
-                        xc3=xc2*xc;
-                        yc3=yc2*yc;
-                        buffer2[n][m][pd2][0] += wc;
-                        buffer2[n][m][pd2][1] += wc*xc;
-                        buffer2[n][m][pd2][2] += wc*yc;
-                        buffer2[n][m][pd2][3] += wc*xc2;
-                        buffer2[n][m][pd2][4] += wc*xc*yc;
-                        buffer2[n][m][pd2][5] += wc*yc*yc;
-                        buffer2[n][m][pd2][6] += wc*xc3;
-                        buffer2[n][m][pd2][7] += wc*xc2*yc;
-                        buffer2[n][m][pd2][8] += wc*xc*yc2;
-                        buffer2[n][m][pd2][9] += wc*yc3;
-                        buffer2[n][m][pd2][10] += wc*xc2*xc2;
-                        buffer2[n][m][pd2][11] += wc*xc3*yc;
-                        buffer2[n][m][pd2][12] += wc*xc2*yc2;
-                        buffer2[n][m][pd2][13] += wc*xc*yc3;
-                        buffer2[n][m][pd2][14] += wc*yc2*yc2;
-                        buffer2[n][m][pd2][15] += Im2;
-                        buffer2[n][m][pd2][16] += xc*Im2;
-                        buffer2[n][m][pd2][17] += yc*Im2;
-                        buffer2[n][m][pd2][18] += xc2*Im2;
-                        buffer2[n][m][pd2][19] += xc*yc*Im2;
-                        buffer2[n][m][pd2][20] += yc2*Im2;
-                        buffer2[n][m][pd2][21] += 1;
-                        buffer2[n][m][pd2][22] += Im;
-                        // C[0] <--> A11 <--> sum w_i
-                        // C[1] <--> A12 <--> sum w_i x_i
-                        // C[2] <--> A13 <--> sum w_i y_i
-                        // C[3] <--> A14 = A22 <--> sum w_i x_i^2
-                        // C[4] <--> A15 = A23 <--> sum w_i x_i y_i
-                        // C[5] <--> A16 = A33 <--> sum w_i y_i^2
-                        // C[6] <--> A24 <--> sum w_i x_i^3
-                        // C[7] <--> A25 = A34 <--> sum w_i x_i^2 y_i
-                        // C[8] <--> A26 = A35 <--> sum w_i x_i y_i^2
-                        // C[9] <--> A36 <--> sum w_i y_i^3
-                        // C[10]<--> A44 <--> sum w_i x_i^4
-                        // C[11]<--> A45 <--> sum w_i x_i^3 y_i
-                        // C[12]<--> A46 = A55 <--> sum w_i x_i^2 y_i^2
-                        // C[13]<--> A56 <--> sum w_i x_i y_i^3
-                        // C[14]<--> A66 <--> sum w_i y_i^4
-                        // C[15]<--> B1 <--> sum w_i I_i
-                        // C[16]<--> B2 <--> sum w_i I_i x_i
-                        // C[17]<--> B3 <--> sum w_i I_i y_i
-                        // C[18]<--> B4 <--> sum w_i I_i x_i^2
-                        // C[19]<--> B5 <--> sum w_i I_i x_i y_i
-                        // C[20]<--> B6 <--> sum w_i I_i y_i^2
-                        break;
-                    }
-                }
-            }
+                                    switch ( order ) {
+                                        case 0:
+                                            buffer[ind + 0] += wc;
+                                            buffer[ind + 1] += Im2;
+                                            buffer[ind + 2] += 1;
+                                            buffer[ind + 3] += Im;
+                                            break;
+                                        case 1:
+                                            buffer[ind + 0] += wc;
+                                            buffer[ind + 1] += wc*xc;
+                                            buffer[ind + 2] += wc*yc;
+                                            buffer[ind + 3] += wc*xc2;
+                                            buffer[ind + 4] += wc*xc*yc;
+                                            buffer[ind + 5] += wc*yc2;
+                                            buffer[ind + 6] += Im2;
+                                            buffer[ind + 7] += Im2*xc;
+                                            buffer[ind + 8] += Im2*yc;
+                                            buffer[ind + 9] += 1;
+                                            buffer[ind + 10] += Im;
+                                            // C[0] <--> A11 <--> sum w_i
+                                            // C[1] <--> A12 <--> sum w_i x_i
+                                            // C[2] <--> A13 <--> sum w_i y_i
+                                            // C[3] <--> A22 <--> sum w_i x_i^2
+                                            // C[4] <--> A23 <--> sum w_i x_i y_i
+                                            // C[5] <--> A33 <--> sum w_i y_i^2
+                                            // C[6] <--> B1 <--> sum w_i I_i
+                                            // C[7] <--> B2 <--> sum w_i I_i x_i
+                                            // C[8] <--> B3 <--> sum w_i I_i y_i
+                                            break;
+                                        case 2:
+                                            xc3=xc2*xc;
+                                            yc3=yc2*yc;
+                                            buffer[ind + 0] += wc;
+                                            buffer[ind + 1] += wc*xc;
+                                            buffer[ind + 2] += wc*yc;
+                                            buffer[ind + 3] += wc*xc2;
+                                            buffer[ind + 4] += wc*xc*yc;
+                                            buffer[ind + 5] += wc*yc*yc;
+                                            buffer[ind + 6] += wc*xc3;
+                                            buffer[ind + 7] += wc*xc2*yc;
+                                            buffer[ind + 8] += wc*xc*yc2;
+                                            buffer[ind + 9] += wc*yc3;
+                                            buffer[ind + 10] += wc*xc2*xc2;
+                                            buffer[ind + 11] += wc*xc3*yc;
+                                            buffer[ind + 12] += wc*xc2*yc2;
+                                            buffer[ind + 13] += wc*xc*yc3;
+                                            buffer[ind + 14] += wc*yc2*yc2;
+                                            buffer[ind + 15] += Im2;
+                                            buffer[ind + 16] += xc*Im2;
+                                            buffer[ind + 17] += yc*Im2;
+                                            buffer[ind + 18] += xc2*Im2;
+                                            buffer[ind + 19] += xc*yc*Im2;
+                                            buffer[ind + 20] += yc2*Im2;
+                                            buffer[ind + 21] += 1;
+                                            buffer[ind + 22] += Im;
+                                            // C[0] <--> A11 <--> sum w_i
+                                            // C[1] <--> A12 <--> sum w_i x_i
+                                            // C[2] <--> A13 <--> sum w_i y_i
+                                            // C[3] <--> A14 = A22 <--> sum w_i x_i^2
+                                            // C[4] <--> A15 = A23 <--> sum w_i x_i y_i
+                                            // C[5] <--> A16 = A33 <--> sum w_i y_i^2
+                                            // C[6] <--> A24 <--> sum w_i x_i^3
+                                            // C[7] <--> A25 = A34 <--> sum w_i x_i^2 y_i
+                                            // C[8] <--> A26 = A35 <--> sum w_i x_i y_i^2
+                                            // C[9] <--> A36 <--> sum w_i y_i^3
+                                            // C[10]<--> A44 <--> sum w_i x_i^4
+                                            // C[11]<--> A45 <--> sum w_i x_i^3 y_i
+                                            // C[12]<--> A46 = A55 <--> sum w_i x_i^2 y_i^2
+                                            // C[13]<--> A56 <--> sum w_i x_i y_i^3
+                                            // C[14]<--> A66 <--> sum w_i y_i^4
+                                            // C[15]<--> B1 <--> sum w_i I_i
+                                            // C[16]<--> B2 <--> sum w_i I_i x_i
+                                            // C[17]<--> B3 <--> sum w_i I_i y_i
+                                            // C[18]<--> B4 <--> sum w_i I_i x_i^2
+                                            // C[19]<--> B5 <--> sum w_i I_i x_i y_i
+                                            // C[20]<--> B6 <--> sum w_i I_i y_i^2
+                                            break;
+                                        }
+                                }
+                            }
+                        }
         }
     }
 }
@@ -382,7 +341,7 @@ void fill_buffer_routine(const char *filename_image, char *filename_homo, int w,
 {
     /* read input image and verify the size */
     int w2, h2, pd2;
-    double *image = iio_read_image_double_vec(filename_image, &w2, &h2, &pd2);
+    double *image = iio_read_image_double_split(filename_image, &w2, &h2, &pd2);
     if( w!=w2 || h!=h2 || pd!=pd2 ) {
         printf("Size of images should be the same \n");
     }
@@ -406,14 +365,12 @@ void fill_buffer_routine_parallel(const char *filename_image, char *filename_hom
 {
     /* read input image and verify the size */
     int w2, h2, pd2;
-    double *image = iio_read_image_double_vec(filename_image, &w2, &h2, &pd2);
-    if( w!=w2 || h!=h2 || pd!=pd2 ) {
+    double *image = iio_read_image_double_split(filename_image, &w2, &h2, &pd2);
+    if( w!=w2 || h!=h2 || pd!=pd2 )
         printf("Size of images should be the same \n");
-    }
-    double *image2 = iio_read_image_double_vec(filename_image2, &w2, &h2, &pd2);
-    if( w!=w2 || h!=h2 || pd!=pd2 ) {
+    double *image2 = iio_read_image_double_split(filename_image2, &w2, &h2, &pd2);
+    if( w!=w2 || h!=h2 || pd!=pd2 )
         printf("Size of images should be the same \n");
-    }
     
     /* read input homography */
     double homo[9];
@@ -433,10 +390,10 @@ void fill_buffer_routine_parallel(const char *filename_image, char *filename_hom
         {
             fill_buffer(buffer2, image2, homo2, zoom, w, h, pd, order, Nreg, sigma2, raw, applic);
         }
-}   
+    }
+
     /* free memory */
     free(image);
     free(image2);
 }
 
-#endif

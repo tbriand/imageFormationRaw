@@ -14,392 +14,282 @@
  *
  */
 
-#ifndef FFT_CORE
-#define FFT_CORE
-
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
-#include <assert.h>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 #include <complex.h>
 #include <fftw3.h>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846 /* pi */
-#endif
+#define FFTW_NTHREADS // comment to disable multithreaded FFT
 
-#define FORI(n) for(int i=0;i<(n);i++)
-#define FORJ(n) for(int j=0;j<(n);j++)
-#define FORL(n) for(int l=0;l<(n);l++)
-
-#ifndef USE_WISDOM
-void evoke_wisdom(void) {}
-void bequeath_wisdom(void) {}
-// #else//USE_WISDOM
-// #include "fftwisdom.c"
-#endif//USE_WISDOM
-
-#include "xmalloc.c"
-
-// wrapper around FFTW3 that computes the complex-valued Fourier transform
-// of a real-valued image
-static void fft_2ddouble(fftw_complex *fx, double *x, int w, int h)
-{
-    fftw_complex *a = fftw_malloc(w*h*sizeof*a);
-
-    //fprintf(stderr, "planning...\n");
-    evoke_wisdom();
-    fftw_plan p = fftw_plan_dft_2d(h, w, a, fx,
-                                     FFTW_FORWARD, FFTW_ESTIMATE);
-    bequeath_wisdom();
-    //fprintf(stderr, "...planned!\n");
-
-    FORI(w*h) a[i] = x[i]; // complex assignment!
-    fftw_execute(p);
-
-    fftw_destroy_plan(p);
-    fftw_free(a);
-    fftw_cleanup();
+// start threaded FFTW if FFTW_NTHREADS is defined
+void init_fftw(void) {
+    #ifdef FFTW_NTHREADS
+    fftw_init_threads();
+    #ifdef _OPENMP
+    fftw_plan_with_nthreads(omp_get_max_threads());
+    #endif
+    #endif
 }
 
+// clean FFTW
+void clean_fftw(void) {
+    fftw_cleanup();
+    #ifdef FFTW_NTHREADS
+    fftw_cleanup_threads(); 
+    #endif
+}
 
-// Wrapper around FFTW3 that computes the real-valued inverse Fourier transform
-// of a complex-valued frequantial image.
-// The input data must be hermitic.
-static void ifft_2ddouble(double *ifx,  fftw_complex *fx, int w, int h)
+// Compute the DFT of a real-valued image.
+void do_fft_real(fftw_complex *out, const double *in, int nx, int ny, int nz)
 {
-    fftw_complex *a = fftw_malloc(w*h*sizeof*a);
-    fftw_complex *b = fftw_malloc(w*h*sizeof*b);
+    // memory allocation
+    fftw_complex *in_plan = (fftw_complex *) malloc(nx*ny*sizeof(fftw_complex));
+    fftw_complex *out_plan = (fftw_complex *) malloc(nx*ny*sizeof(fftw_complex));
+    fftw_plan plan = fftw_plan_dft_2d(ny, nx, in_plan, out_plan, FFTW_FORWARD, FFTW_ESTIMATE);
 
-    //fprintf(stderr, "planning...\n");
-    evoke_wisdom();
-    fftw_plan p = fftw_plan_dft_2d(h, w, a, b,
-                                     FFTW_BACKWARD, FFTW_ESTIMATE);
-    bequeath_wisdom();
-    //fprintf(stderr, "...planned!\n");
+    // loop over the channels
+    for (int l = 0; l < nz; l++) {
+        // Real --> complex
+        for(int i = 0; i < nx*ny; i++)
+            in_plan[i] = (double complex) in[i + l*nx*ny];
 
-    FORI(w*h) a[i] = fx[i];
-    fftw_execute(p);
-    double scale = 1.0/((double) w*h);
-    FORI(w*h) {
-        fftw_complex z = b[i] * scale;
-        ifx[i] = creal(z);
-        //assert(cimagf(z) < 0.001);
+        // compute fft
+        fftw_execute(plan);
+
+        // copy to output
+        memcpy(out + l*nx*ny, out_plan, nx*ny*sizeof(fftw_complex));
     }
-    fftw_destroy_plan(p);
-    fftw_free(a);
-    fftw_free(b);
-    fftw_cleanup();
+
+    // free
+    fftw_destroy_plan(plan);
+    fftw_free(in_plan);
+    fftw_free(out_plan);
 }
 
-// Wrapper around FFTW3 that computes the real-valued inverse Fourier transform
-// of a complex-valued frequantial image.
-// The input data must be hermitic.
-static void ifft_2ddouble_unscaled(double *ifx,  fftw_complex *fx, int w, int h)
+// Compute the real part of the iDFT of a complex-valued image.
+void do_ifft_real(double *out, const fftw_complex *in, int nx, int ny, int nz)
 {
-    fftw_complex *a = fftw_malloc(w*h*sizeof*a);
-    fftw_complex *b = fftw_malloc(w*h*sizeof*b);
+    // memory allocation
+    fftw_complex *in_plan = (fftw_complex *) malloc(nx*ny*sizeof(fftw_complex));
+    fftw_complex *out_plan = (fftw_complex *) malloc(nx*ny*sizeof(fftw_complex));
+    fftw_plan plan = fftw_plan_dft_2d (ny, nx, in_plan, out_plan, FFTW_BACKWARD, FFTW_ESTIMATE);
 
-    //fprintf(stderr, "planning...\n");
-    evoke_wisdom();
-    fftw_plan p = fftw_plan_dft_2d(h, w, a, b,
-                                     FFTW_BACKWARD, FFTW_ESTIMATE);
-    bequeath_wisdom();
-    //fprintf(stderr, "...planned!\n");
+    // normalization constant
+    double norm = 1.0/(nx*ny);
 
-    FORI(w*h) a[i] = fx[i];
-    fftw_execute(p);
-    FORI(w*h) {
-        ifx[i] = creal(b[i]);
-        //assert(cimagf(z) < 0.001);
+    // loop over the channels
+    for (int l = 0; l < nz; l++) {
+        // copy to input
+        memcpy(in_plan, in + l*nx*ny, nx*ny*sizeof(fftw_complex));
+
+        // compute ifft
+        fftw_execute(plan);
+
+        // complex to real + normalization
+        for(int i = 0; i < nx*ny; i++)
+            out[i + l*nx*ny] = creal(out_plan[i])*norm;
     }
-    fftw_destroy_plan(p);
-    fftw_free(a);
-    fftw_free(b);
-    fftw_cleanup();
+
+    // free
+    fftw_destroy_plan(plan);
+    fftw_free(in_plan);
+    fftw_free(out_plan);
 }
 
-static void ifft_unscaled_float(float *ifx, fftw_complex *fx, int w, int h, int pd)
-{
-    fftw_complex *a = fftw_malloc(w*h*sizeof*a);
-    fftw_complex *b = fftw_malloc(w*h*sizeof*b);
+// Compute the fftshift of a complex-valued image.
+void fftshift(fftw_complex *fshift, fftw_complex *fhat, int nx, int ny, int nz) {
+    int nx2 = nx/2;
+    int ny2 = ny/2;
+    int cx = (nx+1)/2;
+    int cy = (ny+1)/2;
+    int i, j, l, i2, j2;
 
-    //fprintf(stderr, "planning...\n");
-    evoke_wisdom();
-    fftw_plan p = fftw_plan_dft_2d(h, w, a, b,
-                                     FFTW_BACKWARD, FFTW_ESTIMATE);
-    bequeath_wisdom();
-    //fprintf(stderr, "...planned!\n");
-
-    FORL(pd) {
-        FORI(w*h) a[i] = fx[i*pd+l];
-        fftw_execute(p);
-        FORI(w*h) {
-            ifx[i*pd+l] = creal(b[i]);
-            //assert(cimagf(z) < 0.001);
+    for(j = 0; j < ny; j++) {
+        j2 = (j < cy) ? j + ny2 : j - cy;
+        for(i = 0; i < nx; i++) {
+            i2 = (i < cx) ? i + nx2 : i - cx;
+            for(l = 0; l < nz; l++)
+                fshift[i2 + j2*nx + l*nx*ny] = fhat[i + j*nx + l*nx*ny];
         }
     }
+}
+
+// Compute the DFT coefficients of the up-sampled image (Line 3 of Algorithm 3 using Proposition 11)
+void upsampling_fourier(fftw_complex *out, fftw_complex *in,
+                               int nxin, int nyin, int nxout, int nyout, int nz, int interp)
+{
+    int i, j, l, i2, j2;
     
-    fftw_destroy_plan(p);
-    fftw_free(a);
-    fftw_free(b);
-    fftw_cleanup();
-}
-
-// Wrapper around FFTW3 that computes the iDCT
-// of a real-valued image.
-static void ifct_2ddouble(double *ifx,  double *fx, int w, int h)
-{
-    evoke_wisdom();
-    fftw_plan p = fftw_plan_r2r_2d(h, w, fx, ifx, FFTW_REDFT01, FFTW_REDFT01, FFTW_ESTIMATE);
-    bequeath_wisdom();
+    // normalization constant
+    double norm = nxout*nyout*1.0/(nxin*nyin);
     
-    fftw_execute(p);
-    fftw_destroy_plan(p);
-    fftw_cleanup();
-}
+    // indices for the fftshift
+    int nx2 = (nxin+1)/2; 
+    int ny2 = (nyin+1)/2;
 
+    // fill the output dft with zeros
+    for (i = 0; i < nxout*nyout*nz; i++)
+        out[i] = 0.0;
 
-
-// if it finds any strange number, sets it to zero
-static void normalize_double_array_inplace(double *x, int n)
-{
-    for (int i = 0; i < n; i++)
-        if (!isnormal(x[i]))
-            x[i] = 0;
-}
-
-static void fft_direct(double *y, double *x, int w, int h, int pd)
-{
-    double *c = xmalloc(w*h*sizeof*c);
-    fftw_complex *gc = xmalloc(w*h*sizeof*gc);
-    FORL(pd) {
-        FORI(w*h)
-            c[i] = x[i*pd + l];
-        fft_2ddouble(gc, c, w, h);
-        FORI(w*h) {
-            y[2*(i*pd + l)+0] = creal(gc[i]);
-            y[2*(i*pd + l)+1] = cimag(gc[i]);
+    // fill the corners with the values
+    for(j = 0; j < nyin; j++) {
+        j2 = (j < ny2) ? j : j + nyout-nyin;
+        for(i = 0; i < nxin; i++) {
+            i2 = (i < nx2) ? i : i + nxout-nxin;
+            for (l = 0; l < nz; l++)
+                out[i2 + j2*nxout + l*nxout*nyout] = norm*in[i + j*nxin + l*nxin*nyin];
         }
     }
-    free(c);
-    free(gc);
-}
 
-static void fft_inverse(double *y, double *x, int w, int h, int pd)
-{
-    int pdh = pd/2;
-    assert(pd == 2*pdh);
-    fftw_complex *c = xmalloc(w*h*sizeof*c);
-    double *gc = xmalloc(w*h*sizeof*gc);
-    FORL(pdh) {
-        FORI(w*h)
-            c[i] = x[i*pd + 2*l] + I * x[i*pd+2*l+1];
-        ifft_2ddouble(gc, c, w, h);
-        FORI(w*h)
-            y[i*pdh + l] = gc[i];
-    }
-    free(c);
-    free(gc);
-}
-
-static void fftshift( fftw_complex *fhat, fftw_complex *fshift, int w, int h, int pd) {
-    int w_test = w/2;
-    int h_test = h/2;
-    int ind_w = (w+1)/2;
-    int ind_h = (h+1)/2;
-    int i2, j2;
-  
-    for(int i=0; i<w; i++) {
-        i2 = (i<ind_w) ? i + w_test : i - ind_w;
-        for(int j=0; j<h; j++) {
-            j2 = (j<ind_h) ? j + h_test : j - ind_h;
-            for(int l=0; l<pd; l++)
-                fshift[(j2*w+i2)*pd + l] = fhat[(j*w+i)*pd + l];
+    // real part
+        // useless in practice if the real part of the image is taken afterwards
+        if ( !(nxin%2) && nxout>nxin) {
+            i = nx2; // positive in output and negative in input
+            i2 = nx2 + nxout-nxin; // negative in output (already initialized)
+            for(j = 0; j < nyin; j++) {
+                j2 = (j < ny2) ? j : j + nyout-nyin;
+                for (l = 0; l < nz; l++) {
+                    out[i2 + j2*nxout + l*nxout*nyout] *= 0.5;
+                    out[i + j2*nxout + l*nxout*nyout] = out[i2 + j2*nxout + l*nxout*nyout];
+                }
+            }
         }
-    }
-}
 
-static void fftshift_double( double *f, double *fshift, int w, int h, int pd) {
-    int w_test = w/2;
-    int h_test = h/2;
-    int ind_w = (w+1)/2;
-    int ind_h = (h+1)/2;
-    int i2, j2;
-  
-    for(int i=0; i<w; i++) {
-        i2 = (i<ind_w) ? i + w_test : i - ind_w;
-        for(int j=0; j<h; j++) {
-            j2 = (j<ind_h) ? j + h_test : j - ind_h;
-            for(int l=0; l<pd; l++)
-                fshift[(j2*w+i2)*pd + l] = f[(j*w+i)*pd + l];
-        }
-    }
-}
-
-static void ifftshift( fftw_complex *fhat, fftw_complex *fshift, int w, int h, int pd) {
-    int indx, indy;
-    int w_test = w/2;
-    int h_test = h/2;
-    int ind_w = (w+1)/2;
-    int ind_h = (h+1)/2;
-    for (int i=0; i<w; i++) {
-        for( int j=0; j<h; j++) {
-            indx = (i < w_test ) ? i+ind_w : i-ind_w;
-            indy = (j < h_test ) ? j+ind_h : j-ind_h;
-            for(int l=0; l<pd; l++)
-                fshift[(j*w+i)*pd+l] = fhat[(indy*w+indx)*pd+l];
-        }
-    }
-}
-
-static void symmetrization(double *in, double *out, int w, int h, int pd)
-{
-  double (*in2)[w][pd] = (void*) in;
-  double (*out2)[2*w][pd] = (void*) out;
-
-  FORL(pd){
-    /* Top left corner */
-    for(int i=0;i<w;i++){
-      for(int j=0; j<h;j++){
-	out2[j][i][l] = in2[j][i][l];
-      }
-    }
-    /* Top right corner */
-    for(int i=w;i<2*w;i++){
-      for(int j=0; j<h;j++){
-	out2[j][i][l] = in2[j][2*w-1-i][l];
-      }
-    }
-    /* Bottom left corner */
-    for(int i=0;i<w;i++){
-      for(int j=h; j<2*h;j++){
-	out2[j][i][l] = in2[2*h-1-j][i][l];
-      }
-    }
-    /* Bottom right corner */
-    for(int i=w;i<2*w;i++){
-      for(int j=h; j<2*h;j++){
-	out2[j][i][l] = in2[2*h-1-j][2*w-1-i][l];
-      }
-    }
-  }
-}
-
-static void lowpass_dft(double *inhat, double *outhat, int w, int h, int pd)
-{
-  double (*outhat2)[w][2*pd] = (void*) outhat;
-  double (*inhat2)[w][2*pd]  = (void*) inhat;
-
-  /* fftshift */
-  int ind_w = (w+1)/2;
-  int ind_h = (h+1)/2;
-  int i3, j3;
-
-  FORI(w){
-    i3 = (i<ind_w) ? i: i - w;
-    FORJ(h){
-      j3 = (j<ind_h) ? j : j - h;
-      FORL(2*pd){
-        outhat2[j][i][l]= ( abs(i3) < ind_w/2 && abs(j3) < ind_h/2 ) ? inhat2[j][i][l] : 0;
-          }
-      }
-  }
-}
-
-static void apply_perfect_lowpass(double *in, double *out, int w, int h, int pd)
-{
-  double *inhat = xmalloc(w*h*2*pd*sizeof*inhat);
-  double *outhat = xmalloc(w*h*2*pd*sizeof*outhat);
-
-  /* compute the FFT of the input */
-  fft_direct(inhat, in, w, h, pd);
-
-  /* set to zero the values */
-  lowpass_dft(inhat, outhat, w , h ,pd);
-
-  /* compute the iFFT */
-  fft_inverse(out, outhat, w, h, 2*pd);
-
-  /* free memory */
-  free(inhat);
-  free(outhat);
-}
-
-static void zoom_in(double *inhat, double *outhat, int zoom, int w, int h, int pd, int option)
-{
-  if( zoom > 1 ) {
-  double norm = zoom*zoom;
-  double (*outhat2)[w*zoom][2*pd] = (void*) outhat;
-  double (*inhat2)[w][2*pd] = (void*) inhat;
-
-    int w_test = w/2;
-    int h_test = h/2;
-    int ind_w = (w+1)/2;
-    int ind_h = (h+1)/2;
-
-    /* Fill the output array with zeros */
-     for (int i=0; i<2*pd*zoom*zoom*w*h; i++)
-        outhat[i]=0.0;
-
-    int jj, ii; /* new coordinates for original pixel (j,i) */
-    /* fill the corners with the values */
-    for(int j=0; j< h; j++){
-        jj = (j<ind_h) ? j : j + (zoom-1)*h;
-        for(int i=0; i<w; i++){
-            ii = (i<ind_w) ? i : i + (zoom-1)*w;
-            for (int l = 0; l < 2*pd; l++)
-                outhat2[jj][ii][l]  = inhat2[j][i][l]*norm;
-        }
-    }
-    
-    //optionally correct the high frequencies
-    if (option == 1) {
-        int ii2, jj2;
-        if ( w_test*2 == w ) {
-            ii = ind_w; //positive and location in input
-            ii2= ind_w + (zoom-1)*w; //negative
-            for(int j=0; j<h; j++) {
-                jj = (j<ind_h) ? j : j + (zoom-1)*h;
-                for (int l = 0; l < 2*pd; l++) {
-                    outhat2[jj][ii2][l]  *= 0.5;
-                    outhat2[jj][ii][l]  = outhat2[jj][ii2][l];
+        if ( !(nyin%2) && nyout>nyin) {
+            j = ny2; // positive in output and negative in input
+            j2 = ny2 + nyout-nyin; // negative in output (already initialized)
+            for(i = 0; i < nxin; i++) {
+                i2 = (i < nx2) ? i : i + nxout-nxin;
+                for (l = 0; l < nz; l++) {
+                    out[i2 + j2*nxout + l*nxout*nyout] *= 0.5;
+                    out[i2 + j*nxout + l*nxout*nyout] = out[i2 + j2*nxout + l*nxout*nyout];
                 }
             }
         }
         
-        if ( h_test*2 == h ) {
-            jj = ind_h; //positive and location in input
-            jj2= ind_h + (zoom-1)*h; //negative
-            for(int i=0; i<w; i++) {
-                ii = (i<ind_w) ? i : i + (zoom-1)*w;
-                for (int l = 0; l < 2*pd; l++) {
-                    outhat2[jj2][ii][l]  *= 0.5;
-                    outhat2[jj][ii][l]  = outhat2[jj2][ii][l];
-                }
+        if ( !interp && !(nxin%2) && !(nyin%2) && nxout>nxin && nyout>nyin) {
+            i = nx2; // positive in output and negative in input
+            i2 = nx2 + nxout-nxin; // negative in output
+            j = ny2; // positive in output and negative in input
+            j2 = ny2 + nyout-nyin; // negative in output
+            for (l = 0; l < nz; l++) {
+                double complex hf = norm*0.5*in[i + j*nxin + l*nxin*nyin];
+                out[i + j*nxout + l*nxout*nyout] = out[i2 + j2*nxout + l*nxout*nyout] = hf;
             }
         }
         
-        if ( h_test*2 == h && w_test*2 == w) {
-            double tmp;
-            ii = ind_w; //positive location in output and location in input
-            ii2= ind_w + (zoom-1)*w; //negative
-            jj = ind_h; //positive location in output and location in input
-            jj2= ind_h + (zoom-1)*h; //negative
-            for (int l = 0; l < 2*pd; l++) {
-                tmp = inhat2[jj][ii][l]*norm;
-                outhat2[jj][ii][l] = 0.25*tmp;
-                outhat2[jj][ii2][l] = 0.25*tmp;
-                outhat2[jj2][ii][l] = 0.25*tmp;
-                outhat2[jj2][ii2][l] = 0.25*tmp;
-            }
+    // real convention
+    if ( interp && !(nxin%2) && !(nyin%2) && nxout>nxin && nyout>nyin) {
+        i = nx2; // positive in output and negative in input
+        i2 = nx2 + nxout-nxin; // negative in output
+        j = ny2; // positive in output and negative in input
+        j2 = ny2 + nyout-nyin; // negative in output
+        for (l = 0; l < nz; l++) {
+            double complex hf = norm*0.25*in[i + j*nxin + l*nxin*nyin];
+            out[i + j*nxout + l*nxout*nyout] = out[i2 + j*nxout + l*nxout*nyout] = out[i + j2*nxout + l*nxout*nyout] = out[i2 + j2*nxout + l*nxout*nyout] = hf;
         }
     }
-  }
-  else {
-      for (int i=0; i<2*pd*zoom*zoom*w*h; i++)
-                outhat[i]=inhat[i];
-  }
 }
 
-#endif
+// Up-sampling of an image using TPI (Algorithm 3).
+void upsampling(double *out, double *in, int nxin, int nyin, int nxout, int nyout, int nz, int interp) 
+{
+    // allocate memory for fourier transform
+    fftw_complex *inhat = fftw_malloc(nxin*nyin*nz*sizeof*inhat);
+    fftw_complex *outhat = fftw_malloc(nxout*nyout*nz*sizeof*outhat);
+
+    // compute DFT of the input
+    do_fft_real(inhat, in, nxin, nyin, nz);
+
+    // phase shift (complex convention)
+    upsampling_fourier(outhat, inhat, nxin, nyin, nxout, nyout, nz, interp);
+
+    // compute iDFT of the input
+    do_ifft_real(out, outhat, nxout, nyout, nz);
+
+    // free memory
+    fftw_free(inhat);
+    fftw_free(outhat);
+}
+
+// Compute the DFT coefficients of the down-sampled image (Line 2 of Algorithm 4 using Proposition 12).
+static void downsampling_fourier(fftw_complex *out, fftw_complex *in,
+                                 int nxin, int nyin, int nxout, int nyout, int nz)
+{
+    int i, j, l, i2, j2;
+    
+    // normalization factor
+    double norm = nxout*nyout*1.0/(nxin*nyin);
+    
+    // indices for the fftshift
+    int nx2 = (nxout+1)/2; 
+    int ny2 = (nyout+1)/2;
+
+    // first pass of filling
+    for(j = 0; j < nyout; j++) {
+        j2 = (j < ny2) ? j : j + nyin-nyout;
+        for(i = 0; i < nxout; i++){
+            i2 = (i < nx2) ? i : i + nxin-nxout;
+            for (l = 0; l < nz; l++)
+                out[i + j*nxout + l*nxout*nyout] = in[i2 + j2*nxin + l*nxin*nyin]*norm;
+        }
+    }
+
+    // handling of boundary coefficients
+        if ( nxout%2 == 0 && nxout<nxin) {
+            i2 = nx2; // border index in output AND opposite border index in input
+            for (j = 0; j < nyout; j++) { // index in output
+                j2 = (j < ny2) ? j : j + nyin-nyout; // index in input
+                for (l = 0; l < nz; l++)
+                    out[i2 + j*nxout + l*nxout*nyout] += in[i2 + j2*nxin + l*nxin*nyin]*norm;
+            }
+        }
+
+        if ( nyout%2 == 0 && nyout<nyin) {
+            j2 = ny2; // border index in output AND opposite border index in input
+            for (i = 0; i < nxout; i++) { // index in output
+                i2 = (i < nx2) ? i : i + nxin-nxout; // index in input
+                for (l = 0; l < nz; l++)
+                    out[i + j2*nxout + l*nxout*nyout] += in[i2 + j2*nxin + l*nxin*nyin]*norm;
+            }
+        }
+
+        if ( nxout%2 == 0 && nyout%2 == 0 && nxout<nxin && nyout<nyin) {
+            i = nx2; // border index in output AND opposite border index in input
+            i2 = nx2 + nxin-nxout; // border index in input
+            j = ny2; // border index in output AND opposite border index in input
+            j2 = ny2 + nyin-nyout; // border index in input
+            for (l = 0; l < nz; l++)
+                out[i + j*nxout + l*nxout*nyout] = norm*(
+                      in[i + j*nxin + l*nxin*nyin] 
+                    + in[i2 + j*nxin + l*nxin*nyin]
+                    + in[i + j2*nxin + l*nxin*nyin] 
+                    + in[i2 + j2*nxin + l*nxin*nyin]);
+        }
+}
+
+// Down-sampling of an image using TPI (Algorithm 4).
+void downsampling(double *out, double *in, int nxin, int nyin, int nxout, int nyout, int nz) 
+{
+    // allocate memory for fourier transform
+    fftw_complex *inhat = fftw_malloc(nxin*nyin*nz*sizeof*inhat);
+    fftw_complex *outhat = fftw_malloc(nxout*nyout*nz*sizeof*outhat);
+
+    // compute DFT of the input
+    do_fft_real(inhat, in, nxin, nyin, nz);
+    
+    // phase shift (complex convention)
+    downsampling_fourier(outhat, inhat, nxin, nyin, nxout, nyout, nz);
+    
+    // compute iDFT of the input
+    do_ifft_real(out, outhat, nxout, nyout, nz);
+    
+    // free memory
+    fftw_free(inhat);
+    fftw_free(outhat);
+}

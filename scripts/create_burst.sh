@@ -22,7 +22,7 @@ SIGMA=$4
 RAW=$5
 INTERP=$6
 if [ -z "$INTERP" ]; then
-    INTERP=splineper
+    INTERP=p+s-spline11-spline3
 fi
 BOUNDARY=$7
 if [ -z "$BOUNDARY" ]; then
@@ -51,12 +51,7 @@ if [ -z "$ZOOM" ]; then
 fi
 
 # create standard burst
-create_burst $IN $BASE $NUMBER $INTERP $BOUNDARY $L $TYPE $ZOOM
-
-# add noise
-for i in `seq 1 $NUMBER`; do
-    add_noise $SIGMA ${BASE}_$i.tiff ${BASE}_$i.tiff
-done
+create_burst $IN $BASE $NUMBER -i $INTERP -b $BOUNDARY -L $L -t $TYPE -z $ZOOM -n $SIGMA
 
 # compute corresponding CFA images
 if [ "$RAW" -eq "1" ]; then
