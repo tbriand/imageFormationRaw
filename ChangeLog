@@ -1,6 +1,24 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 2019-08-13
+### Changed
+- Update of iio library (issue with JPEG images fixed)
+- Reorganize external directory (imscript and bspline)
+- No include of .c file
+- Main files are named main_***.c
+- Consistency of convention in iio (split color)
+- Rework create_burst program
+- New convention for the name of interpolation methods
+### Added
+- Parallelization of make (-j option)
+- NFFT library
+- Trigonometric polynomial related utils
+- Interpolation using p+s or zoomed methods
+- Periodic plus smooth decomposition
+- Parameter sigmanc in fusion script
+- Identity transformation written in a file for the reference image
+
 ## [1.1.0] - 2019-07-24
 ### Added
 - Extension to standard images (grayscale or color)

@@ -41,6 +41,7 @@ Required libraries:
 
 Optional libraries:
 [libgomp](https://gcc.gnu.org/projects/gomp/)
+[libgsl](https://www.gnu.org/software/gsl/)
 
 All the build instructions are contained in the build.sh script.
 It produces the "build/" directory with all the required binaries.
@@ -66,7 +67,7 @@ The precision of the method can be tested on synthetic data using the evaluate_p
 * build.sh           : script for the compilation
 * ChangeLog	     : list of all notable changes to the project
 * CMakeLists.txt     : cmake file
-* external           : directory containing external programs (dcraw, ponomarenko, modified inverse compositional)
+* external           : directory containing external programs (dcraw, ponomarenko, modified inverse compositional, nfft3, bspline)
 * image_formation.sh : main script for using the method
 * LICENSE            : license file
 * Readme.md          : readme file
