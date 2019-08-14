@@ -44,9 +44,17 @@ void print_help(char *name)
     printf("\t Homographies after crop are written as base_crop_%%i.hom\n");
     printf("\t The first image of the generated sequence is the reference (identity)\n");
     printf("\t L controls the displacement of the corners (to generate the transformation)\n");
-    printf("\t type is the type of transformation (2 translation, 3 euclidean, 6 affinity, 8 homography\n");
+    printf("\t type is the type of transformation (2 translation, 3 euclidean, 6 affinity, 8 homography, 'horizontal')\n");
     printf("\t zoom corresponds to the down-sampling factor\n");
 }
+
+enum Type {
+    TRANSLATION=2,
+    EUCLIDEAN=3,
+    AFFINITY=6,
+    HOMOGRAPHY=8,
+    HORIZONTAL,
+};
 
 // read command line parameters
 static int read_parameters(int argc, char *argv[], char **infile, char **outfile,
@@ -55,11 +63,13 @@ static int read_parameters(int argc, char *argv[], char **infile, char **outfile
 {
     // display usage
     if (argc < 4) {
+help:
         print_help(argv[0]);
         return 0;
     }
     else {
         int i = 1;
+        char* typestr = NULL;
         *infile  = argv[i++];
         *outfile = argv[i++];
         *n = atoi(argv[i++]);
@@ -89,8 +99,9 @@ static int read_parameters(int argc, char *argv[], char **infile, char **outfile
                     *L = atof(argv[++i]);
                 
             if(strcmp(argv[i],"-t")==0)
-                if(i < argc-1)
-                    *type = atoi(argv[++i]);
+                if(i < argc-1) {
+                    typestr = argv[++i];
+                }
                 
             if(strcmp(argv[i],"-z")==0)
                 if(i < argc-1)
@@ -113,8 +124,18 @@ static int read_parameters(int argc, char *argv[], char **infile, char **outfile
         
         // sanity check
         *L = (*L >= 0) ? *L : PAR_DEFAULT_L;
-        if ( *type != 2 && *type != 3 && *type != 6 && *type != 8 )
+        if (!typestr) {
             *type = PAR_DEFAULT_TYPE;
+        } else if (atoi(typestr)) {
+            *type = atoi(typestr);
+        } else {
+            if (!strcmp(typestr, "horizontal")) {
+                *type = HORIZONTAL;
+            } else {
+                fprintf(stderr, "invalid type '%s'\n", typestr);
+                goto help;
+            }
+        }
         *zoom = (*zoom > 0) ? *zoom : PAR_DEFAULT_ZOOM;
         *sigma = (*sigma >= 0) ? *sigma : PAR_DEFAULT_SIGMA;
         *crop = (*crop >= 0) ? *crop : PAR_DEFAULT_CROP;
@@ -155,24 +176,29 @@ int main(int c, char *v[])
 
         // randomly compute homographies
         for (int j = 0; j < n; j++) {
-            if ( j > 0 )
-                create_random_transformation(H, L, w, h, type);
-            else { // fill first with identity
-                H[0] = 1.0;
-                H[1] = 0.0;
-                H[2] = 0.0;
-                H[3] = 0.0;
-                H[4] = 1.0;
-                H[5] = 0.0;
-                H[6] = 0.0;
-                H[7] = 0.0;
-                H[8] = 1.0;
+            H[0] = 1.0;
+            H[1] = 0.0;
+            H[2] = 0.0;
+            H[3] = 0.0;
+            H[4] = 1.0;
+            H[5] = 0.0;
+            H[6] = 0.0;
+            H[7] = 0.0;
+            H[8] = 1.0;
+            if ( j > 0 ) {
+                if (type == HORIZONTAL) {
+                    H[2] = j;
+                } else {
+                    create_random_transformation(H, L, w, h, type);
+                }
+            } else {
+                // keep it identity
             }
-            
+
             // save the homography
             for (int i = 0; i < 9; i++)
                 homographies[9*j+i] = H[i];
-            
+
             // write it in a file by taking into account the eventual zoom
             zoom_homography(H2, H, 1.0/zoom, 1.0/zoom);
             sprintf(filename_homo, "%s_%i.hom", base_out, j+1);
@@ -181,11 +207,11 @@ int main(int c, char *v[])
                 fprintf(f,"%1.16lg%c", H2[i], i==8 ? '\n' : ' ');
             }
             fclose(f);
-            
+
             // crop case
             if ( crop ) {
                 translate_homography(H, H2, crop, crop);
-                
+
                 // save homography and write it in a file
                 sprintf(filename_homo, "%s_crop_%i.hom", base_out, j+1);
                 FILE *g = fopen(filename_homo, "w");
