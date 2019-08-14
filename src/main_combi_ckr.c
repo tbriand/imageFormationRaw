@@ -27,12 +27,13 @@ int main(int c, char *v[])
     if (c != 10) {
             fprintf(stderr,"usage:\n\t%s path_image path_homo number_ini number_end zoom out order sigma raw\n", *v);
             //                         0 1          2         3          4          5    6   7     8     9
+            fprintf(stderr,"example:\n\t%s im%%03d.tiff homo%%03d.tiff 1 30 1 output.tiff 2 0.7 0\n", *v);
             return EXIT_FAILURE;
     }
-    
+
     // initialize time
     unsigned long t1 = xmtime();
-    
+
     char *path_image = c > 1 ? v[1] : "-";
     char *path_homo = c > 2 ? v[2] : "-";
     int  ini = atoi(v[3]);
