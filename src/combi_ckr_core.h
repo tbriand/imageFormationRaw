@@ -6,12 +6,12 @@
 
 void compute_image(double *out, const double *buffer, int w, int h, int pd, int order, int Nreg);
 void fill_buffer_routine(const char *filename_image, char *filename_homo, int w, int h, int pd,
-                         double *buffer, float zoom, int order, int Nreg, double sigma2,
+                         double *buffer, double zoom, int order, int Nreg, double sigma2,
                          int raw, const double *applic);
 void fill_buffer_routine_parallel(const char *filename_image, char *filename_homo,
                          const char *filename_image2, char *filename_homo2,
                          int w, int h, int pd,
-                         double *buffer, double *buffer2, float zoom, int order, int Nreg, double sigma2,
+                         double *buffer, double *buffer2, double zoom, int order, int Nreg, double sigma2,
                          int raw, const double *applic);
 
 
