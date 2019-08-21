@@ -24,6 +24,7 @@
 #include "interpolation_core.h"
 #include "homography_core.h"
 #include "fft_core.h"
+#include "filter_core.h"
 
 #define PAR_DEFAULT_L 3
 #define PAR_DEFAULT_TYPE 8
@@ -31,11 +32,12 @@
 #define PAR_DEFAULT_CROP 0
 #define PAR_DEFAULT_SIGMA 0
 #define PAR_DEFAULT_SEED 0
+#define PAR_DEFAULT_PSF 0
 
 // display help usage
 void print_help(char *name)
 {
-    printf("\nusage:\n\t%s input base number -i interp -b boundary -L L -t type -z zoom -c crop -n sigma -s seed]  \n", name);
+    printf("\nusage:\n\t%s input base number -i interp -b boundary -L L -t type -z zoom -c crop -n sigma -s seed -p psf]  \n", name);
     
     printf("\n");
     printf("\t Output images are written as base_%%i.tiff\n");
@@ -46,6 +48,7 @@ void print_help(char *name)
     printf("\t L controls the displacement of the corners (to generate the transformation)\n");
     printf("\t type is the type of transformation (2 translation, 3 euclidean, 6 affinity, 8 homography, 'horizontal')\n");
     printf("\t zoom corresponds to the down-sampling factor\n");
+    printf("\t psf controls the subsampling type: set to 1 to integrate\n");
 }
 
 enum Type {
@@ -59,7 +62,7 @@ enum Type {
 // read command line parameters
 static int read_parameters(int argc, char *argv[], char **infile, char **outfile,
                            int *n, char **interp, char **boundary, double *L, int *type,
-                           double *zoom, int *crop, double *sigma, unsigned long *seed)
+                           double *zoom, int *crop, double *sigma, unsigned long *seed, int *psf)
 {
     // display usage
     if (argc < 4) {
@@ -83,6 +86,7 @@ help:
         *sigma     = PAR_DEFAULT_SIGMA;
         *crop      = PAR_DEFAULT_CROP;
         *seed      = PAR_DEFAULT_SEED;
+        *psf       = PAR_DEFAULT_PSF;
         
         //read each parameter from the command line
         while(i < argc) {
@@ -118,6 +122,10 @@ help:
             if(strcmp(argv[i],"-s")==0)
                 if(i < argc-1)
                     *seed = atoi(argv[++i]);
+                
+            if(strcmp(argv[i],"-p")==0)
+                if(i < argc-1)
+                    *psf = atoi(argv[++i]);
 
             i++;
         }
@@ -139,6 +147,10 @@ help:
         *zoom = (*zoom > 0) ? *zoom : PAR_DEFAULT_ZOOM;
         *sigma = (*sigma >= 0) ? *sigma : PAR_DEFAULT_SIGMA;
         *crop = (*crop >= 0) ? *crop : PAR_DEFAULT_CROP;
+        if ( floor(*zoom) != *zoom && psf ) {
+            fprintf(stderr, "Integration is possible only for integer zoom\n");
+            goto help;
+        }
 
         return 1;
     }
@@ -147,12 +159,12 @@ help:
 int main(int c, char *v[])
 {
     char *filename_in, *base_out, *interp, *boundary;
-    int n, type, crop;
+    int n, type, crop, psf;
     unsigned long seed;
     double L, zoom, sigma;
     
     int result = read_parameters(c, v, &filename_in, &base_out, &n, &interp, &boundary,
-        &L, &type, &zoom, &crop, &sigma, &seed);
+        &L, &type, &zoom, &crop, &sigma, &seed, &psf);
 
     if ( result ) {
         // initialize FFTW
@@ -168,6 +180,9 @@ int main(int c, char *v[])
         // rand initialization
         xsrand(seed);
 
+        // zoom handling
+        double zoom_resampling = ( !psf ) ? zoom : 1;
+        
         // create all the homographies
         // it is done in the beginning so that for a given seed we always have the same homographies
         double *homographies = malloc(9*n*sizeof(double));
@@ -224,18 +239,32 @@ int main(int c, char *v[])
         // Boudary condition 
         BoundaryExt boundaryExt = read_ext(boundary);  
 
-        // compute images
+        // output image
         int wout = w/zoom;
         int hout = h/zoom;
-        char filename_out[500];
         double *out = malloc(wout*hout*pd*sizeof*out);
+        char filename_out[500];
+               
+        // image after resampling
+        double *out_resampling = malloc(w*h*pd*sizeof*out_resampling);
         
         for (int j = 0; j < n; j++) {
             for(int i = 0; i < 9; i++)
                 H[i] = homographies[9*j+i];
             
             // apply geometric transformation to the input
-            interpolate_image_homography(out, in, w, h, pd, H, interp, boundaryExt, zoom);
+            interpolate_image_homography(out_resampling, in, w, h, pd, H, interp, boundaryExt, zoom_resampling);
+            
+            // subsampling if integration
+            if ( psf && zoom != 1 ) {
+                apply_integration_kernel(out_resampling, out_resampling, w, h, pd, zoom);
+                for(int l = 0; l < pd; l++)
+                    for(int j = 0; j < hout; j++)
+                        for(int i = 0; i < wout; i++)
+                            out[i+j*wout+l*wout*hout] = out_resampling[((int) zoom)*i + j*((int) zoom)*w + l*w*h];
+            }
+            else
+                memcpy(out, out_resampling, wout*hout*pd*sizeof*out_resampling);
             
             // add noise
             if ( sigma > 0 )
@@ -261,7 +290,6 @@ int main(int c, char *v[])
                 iio_write_image_double_split(filename_out, out_crop, wcrop, hcrop, pd);
                 free(out_crop);
             }
-            
         }
 
         // final time and print time
@@ -272,6 +300,7 @@ int main(int c, char *v[])
         free(in);
         free(homographies);
         free(out);
+        free(out_resampling);
         clean_fftw();
     }
     

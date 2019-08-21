@@ -38,7 +38,7 @@ int main(int c, char *v[])
     char *path_homo = c > 2 ? v[2] : "-";
     int  ini = atoi(v[3]);
     int  end = atoi(v[4]);
-    float zoom = atof(v[5]);
+    double zoom = atof(v[5]);
     char *filename_out= c > 6 ? v[6] : "-";
     int order = atoi(v[7]);
     float sigma2 = atof(v[8]);

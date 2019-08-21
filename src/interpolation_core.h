@@ -14,6 +14,6 @@ typedef enum
 
 BoundaryExt read_ext(const char* boundary);
 void interpolate_image_homography(double *out, double *in, int w, int h, int pd, double H[9], 
-                                  char *interp, BoundaryExt boundaryExt, float zoom);
+                                  char *interp, BoundaryExt boundaryExt, double zoom);
 
 #endif

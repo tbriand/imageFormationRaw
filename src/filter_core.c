@@ -279,3 +279,44 @@ void apply_perfect_lowpass(double *in, double *out, int w, int h, int pd)
     fftw_free(inhat);
     fftw_free(outhat);
 }
+
+#define sinc(x) x ? sin(x)/(x) : 1
+static void integration_kernel(fftw_complex *inhat, fftw_complex *outhat, int w, int h, int pd, double zoom)
+{
+    // fftshift
+    int ind_w = (w+1)/2;
+    int ind_h = (h+1)/2;
+    int i3, j3;
+    double factori, factorj;
+    
+    for(int l=0; l<pd; l++)
+        for(int j=0; j<h; j++) {
+            j3 = (j<ind_h) ? j : j - h;
+            factorj = sinc(zoom*M_PI/h*j3);
+            for(int i=0; i<w; i++) {
+                i3 = (i<ind_w) ? i: i - w;
+                factori = sinc(zoom*M_PI/w*i3);
+                outhat[i+j*w+l*w*h] = factori*factorj*inhat[i+j*w+l*w*h];
+            }
+        }
+}
+
+void apply_integration_kernel(double *in, double *out, int w, int h, int pd, double zoom)
+{
+    // memory allocation
+    fftw_complex *inhat = malloc(w*h*pd*sizeof*inhat);
+    fftw_complex *outhat = malloc(w*h*pd*sizeof*outhat);
+
+    // compute DFT of the input
+    do_fft_real(inhat, in, w, h, pd);
+
+    // apply the integration kernel */
+    integration_kernel(inhat, outhat, w, h, pd, zoom);
+
+    // compute iDFT of the input
+    do_ifft_real(out, outhat, w, h, pd);
+
+    // free memory
+    fftw_free(inhat);
+    fftw_free(outhat);
+}

@@ -153,7 +153,7 @@ static void interpolate_image_at_method(double *out, double *in, int w, int h, i
         interpolate_at(out, in, w, h, pd, interp, bc, x, y, numPixels);
 }
 
-void interpolate_image_homography(double *out, double *in, int w, int h, int pd, double H[9], char *interp, BoundaryExt bc, float zoom) {
+void interpolate_image_homography(double *out, double *in, int w, int h, int pd, double H[9], char *interp, BoundaryExt bc, double zoom) {
     
     // output sizes
     int wout = w/zoom;
